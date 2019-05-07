@@ -1,0 +1,454 @@
+---
+title: "MACS 30200 HW1"
+author: Ling Dai
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r import lib and data}
+#import libraries
+library(keras)
+library(tensorflow)
+use_condaenv('r-tensorflow')
+
+#import data
+fmnist <- dataset_fashion_mnist()
+
+#set seed
+set.seed(1234)
+```
+
+```{r data pre-processing}
+train_images <- fmnist$train$x
+train_labels <- fmnist$train$y
+test_images <- fmnist$test$x
+test_labels <- fmnist$test$y
+
+train_labels <- to_categorical(train_labels)
+test_labels <- to_categorical(test_labels)
+
+#Preprocess the data by converting the data to a 2D tensor with individual values between 0 and 1
+img_rows <- img_cols <- 28
+train_images <- array_reshape(train_images, c(60000, 28*28))
+train_images <- train_images / 255
+str(train_images)
+
+test_images <- array_reshape(test_images, c(10000, 28*28))
+test_images <- test_images / 255
+str(test_images)
+
+#Randomly split the training data into 50,000 training observations and 10,000 validation observations
+training_ind <- sample(60000, size = 50000)
+training_images <- train_images[training_ind, ]
+training_labels <- train_labels[training_ind, ]
+validation_images <- train_images[-training_ind, ]
+validation_labels <- train_labels[-training_ind, ]
+```
+
+#Initial Model
+
+For the initial model, the validation loss reached a minimum value of 0.32 at the 9th epoch.
+
+```{r initial model}
+#initial model
+network <- keras_model_sequential() %>% 
+  layer_dense(units = 512, activation = "relu", input_shape = c(28 * 28)) %>%
+  layer_dense(units = 512, activation = "relu", input_shape = c(28 * 28)) %>%
+  layer_dense(units = 512, activation = "relu", input_shape = c(28 * 28)) %>%
+  layer_dense(units = 512, activation = "relu", input_shape = c(28 * 28)) %>%
+  layer_dense(units = 10, activation = "softmax")
+
+network %>% compile(
+  optimizer = "rmsprop",
+  loss = "categorical_crossentropy",
+  metrics = c("accuracy")
+)
+
+history1 <- network %>% fit(training_images, training_labels,
+                            epochs = 200, batch_size = 512,
+                            validation_data = list(validation_images, validation_labels))
+
+plot(history1)
+min(history1$metrics$val_loss)
+which(history1$metrics$val_loss==min(history1$metrics$val_loss))
+```
+
+#Drop-out Model
+
+The drop-out model attained a minimum of 0.3 validation loss at the 39nd epoch. Graphically comparing the validation loss curves of these two models, we can see that the drop-out model performs better than the initial model, especially as the number of epochs increases.
+
+```{r drop-out model}
+network <- keras_model_sequential() %>% 
+  layer_dense(units = 512, activation = "relu", input_shape = c(28 * 28)) %>%
+  layer_dropout(rate = 0.5) %>%
+  layer_dense(units = 512, activation = "relu", input_shape = c(28 * 28)) %>%
+  layer_dropout(rate = 0.5) %>%
+  layer_dense(units = 512, activation = "relu", input_shape = c(28 * 28)) %>%
+  layer_dropout(rate = 0.5) %>%
+  layer_dense(units = 512, activation = "relu", input_shape = c(28 * 28)) %>%
+  layer_dropout(rate = 0.5) %>%
+  layer_dense(units = 10, activation = "softmax")
+
+network %>% compile(
+  optimizer = "rmsprop",
+  loss = "categorical_crossentropy",
+  metrics = c("accuracy")
+)
+
+history2 <- network %>% fit(training_images, training_labels,
+                           epochs = 200, batch_size = 512,
+                           validation_data = list(validation_images, validation_labels))
+
+plot(history2)
+min(history2$metrics$val_loss)
+which(history2$metrics$val_loss==min(history2$metrics$val_loss))
+```
+
+```{r graphical comparison 1}
+plot(seq(1,200), history1$metrics$val_loss, type='l', col="blue", ylim=c(0,5))
+lines(seq(1,200), history2$metrics$val_loss, col="red", ylim=c(0,5))
+```
+
+#Weight-Regularized Model
+
+The l1 weight-regularized model attained a minimum validation loss of 1.1 at epoch 171. The l2 weight-regularized model attained a minimum validation loss of 0.37 at epoch 105. Also, according to the graphical comparison below, l2 weight-regularized model performed better than l1 weight-regularized model in this case.
+
+```{r l1 regularized model}
+network <- keras_model_sequential() %>% 
+  layer_dense(units = 512, activation = "relu", input_shape = c(28 * 28),
+              kernel_regularizer = regularizer_l1(l=0.001)) %>%
+  layer_dense(units = 512, activation = "relu", input_shape = c(28 * 28),
+              kernel_regularizer = regularizer_l1(l=0.001)) %>%
+  layer_dense(units = 512, activation = "relu", input_shape = c(28 * 28),
+              kernel_regularizer = regularizer_l1(l=0.001)) %>%
+  layer_dense(units = 512, activation = "relu", input_shape = c(28 * 28),
+              kernel_regularizer = regularizer_l1(l=0.001)) %>%
+  layer_dense(units = 10, activation = "softmax")
+
+network %>% compile(
+  optimizer = "rmsprop",
+  loss = "categorical_crossentropy",
+  metrics = c("accuracy")
+)
+
+history3 <- network %>% fit(training_images, training_labels,
+                epochs = 200, batch_size = 512,
+                validation_data = list(validation_images, validation_labels))
+plot(history3)
+min(history3$metrics$val_loss)
+which(history3$metrics$val_loss==min(history3$metrics$val_loss))
+```
+
+```{r l2 regularized model}
+network <- keras_model_sequential() %>% 
+  layer_dense(units = 512, activation = "relu", input_shape = c(28 * 28),
+              kernel_regularizer = regularizer_l2(l=0.001)) %>%
+  layer_dense(units = 512, activation = "relu", input_shape = c(28 * 28),
+              kernel_regularizer = regularizer_l2(l=0.001)) %>%
+  layer_dense(units = 512, activation = "relu", input_shape = c(28 * 28),
+              kernel_regularizer = regularizer_l2(l=0.001)) %>%
+  layer_dense(units = 512, activation = "relu", input_shape = c(28 * 28),
+              kernel_regularizer = regularizer_l2(l=0.001)) %>%
+  layer_dense(units = 10, activation = "softmax")
+
+network %>% compile(
+  optimizer = "rmsprop",
+  loss = "categorical_crossentropy",
+  metrics = c("accuracy")
+)
+
+history4 <- network %>% fit(training_images, training_labels,
+                epochs = 200, batch_size = 512,
+                validation_data = list(validation_images, validation_labels))
+plot(history4)
+min(history4$metrics$val_loss)
+which(history4$metrics$val_loss==min(history4$metrics$val_loss))
+```
+
+```{r graphical comparison 2}
+plot(seq(1,200), history3$metrics$val_loss, type='l', col="blue", ylim=c(0,5))
+lines(seq(1,200), history4$metrics$val_loss, col="red", ylim=c(0,5))
+```
+
+#Alternative Models
+
+```{r Alternative model 1}
+
+#lowest 0.33 @ 14
+network <- keras_model_sequential() %>% 
+  layer_dense(units = 256, activation = "relu", input_shape = c(28 * 28)) %>%
+  layer_dense(units = 256, activation = "relu", input_shape = c(28 * 28)) %>%
+  layer_dense(units = 256, activation = "relu", input_shape = c(28 * 28)) %>%
+  layer_dense(units = 256, activation = "relu", input_shape = c(28 * 28)) %>%
+  layer_dense(units = 10, activation = "softmax")
+
+network %>% compile(
+  optimizer = "rmsprop",
+  loss = "categorical_crossentropy",
+  metrics = c("accuracy")
+)
+
+history5 <- network %>% fit(training_images, training_labels,
+                epochs = 100, batch_size = 256,
+                validation_data = list(validation_images, validation_labels))
+plot(history5)
+min(history5$metrics$val_loss)
+which(history5$metrics$val_loss==min(history5$metrics$val_loss))
+```
+
+```{r Alternative model 2}
+
+#lowest 0.31 @ 9
+network <- keras_model_sequential() %>% 
+  layer_dense(units = 512, activation = "relu", input_shape = c(28 * 28)) %>%
+  layer_dense(units = 512, activation = "relu", input_shape = c(28 * 28)) %>%
+  layer_dense(units = 512, activation = "relu", input_shape = c(28 * 28)) %>%
+  layer_dense(units = 10, activation = "softmax")
+
+network %>% compile(
+  optimizer = "rmsprop",
+  loss = "categorical_crossentropy",
+  metrics = c("accuracy")
+)
+
+history6 <- network %>% fit(training_images, training_labels,
+                epochs = 100, batch_size = 512,
+                validation_data = list(validation_images, validation_labels))
+plot(history6)
+min(history6$metrics$val_loss)
+which(history6$metrics$val_loss==min(history6$metrics$val_loss))
+```
+
+
+```{r Alternative model 3}
+
+#lowest 0.31 @ 33
+network <- keras_model_sequential() %>% 
+  layer_dense(units = 512, activation = "sigmoid", input_shape = c(28 * 28)) %>%
+  layer_dense(units = 512, activation = "sigmoid", input_shape = c(28 * 28)) %>%
+  layer_dense(units = 512, activation = "relu", input_shape = c(28 * 28)) %>%
+  layer_dense(units = 512, activation = "relu", input_shape = c(28 * 28)) %>%
+  layer_dense(units = 10, activation = "softmax")
+
+network %>% compile(
+  optimizer = "rmsprop",
+  loss = "categorical_crossentropy",
+  metrics = c("accuracy")
+)
+
+history7 <- network %>% fit(training_images, training_labels,
+                epochs = 100, batch_size = 512,
+                validation_data = list(validation_images, validation_labels))
+plot(history7)
+min(history7$metrics$val_loss)
+which(history7$metrics$val_loss==min(history7$metrics$val_loss))
+```
+
+```{r Alternative model 4}
+
+#lowest 0.31 @ 13
+network <- keras_model_sequential() %>% 
+  layer_dense(units = 256, activation = "sigmoid", input_shape = c(28 * 28)) %>%
+  layer_dense(units = 256, activation = "sigmoid", input_shape = c(28 * 28)) %>%
+  layer_dense(units = 256, activation = "relu", input_shape = c(28 * 28)) %>%
+  layer_dense(units = 256, activation = "relu", input_shape = c(28 * 28)) %>%
+  layer_dense(units = 10, activation = "softmax")
+
+network %>% compile(
+  optimizer = "rmsprop",
+  loss = "categorical_crossentropy",
+  metrics = c("accuracy")
+)
+
+history8 <- network %>% fit(training_images, training_labels,
+                epochs = 100, batch_size = 256,
+                validation_data = list(validation_images, validation_labels))
+plot(history8)
+min(history8$metrics$val_loss)
+which(history8$metrics$val_loss==min(history8$metrics$val_loss))
+```
+
+```{r Alternative model 5}
+
+#lowest 0.3 @ 28
+network <- keras_model_sequential() %>% 
+  layer_dense(units = 256, activation = "sigmoid", input_shape = c(28 * 28)) %>%
+  layer_dense(units = 256, activation = "sigmoid", input_shape = c(28 * 28)) %>%
+  layer_dense(units = 256, activation = "sigmoid", input_shape = c(28 * 28)) %>%
+  layer_dense(units = 256, activation = "sigmoid", input_shape = c(28 * 28)) %>%
+  layer_dense(units = 10, activation = "softmax")
+
+network %>% compile(
+  optimizer = "rmsprop",
+  loss = "categorical_crossentropy",
+  metrics = c("accuracy")
+)
+
+history9 <- network %>% fit(training_images, training_labels,
+                epochs = 100, batch_size = 256,
+                validation_data = list(validation_images, validation_labels))
+plot(history9)
+min(history9$metrics$val_loss)
+which(history9$metrics$val_loss==min(history9$metrics$val_loss))
+```
+
+```{r Alternative model 6}
+
+#lowest 0.3 @ 51
+network <- keras_model_sequential() %>% 
+  layer_dense(units = 512, activation = "sigmoid", input_shape = c(28 * 28)) %>%
+  layer_dense(units = 512, activation = "sigmoid", input_shape = c(28 * 28)) %>%
+  layer_dense(units = 512, activation = "sigmoid", input_shape = c(28 * 28)) %>%
+  layer_dense(units = 512, activation = "sigmoid", input_shape = c(28 * 28)) %>%
+  layer_dense(units = 10, activation = "softmax")
+
+network %>% compile(
+  optimizer = "rmsprop",
+  loss = "categorical_crossentropy",
+  metrics = c("accuracy")
+)
+
+history10 <- network %>% fit(training_images, training_labels,
+                epochs = 100, batch_size = 512,
+                validation_data = list(validation_images, validation_labels))
+plot(history10)
+min(history10$metrics$val_loss)
+which(history10$metrics$val_loss==min(history10$metrics$val_loss))
+
+```
+
+```{r Alternative model 7}
+
+#lowest 0.31 @ 17
+network <- keras_model_sequential() %>% 
+  layer_dense(units = 512, activation = "elu", input_shape = c(28 * 28)) %>%
+  layer_dense(units = 512, activation = "elu", input_shape = c(28 * 28)) %>%
+  layer_dense(units = 512, activation = "elu", input_shape = c(28 * 28)) %>%
+  layer_dense(units = 512, activation = "elu", input_shape = c(28 * 28)) %>%
+  layer_dense(units = 10, activation = "softmax")
+
+network %>% compile(
+  optimizer = "rmsprop",
+  loss = "categorical_crossentropy",
+  metrics = c("accuracy")
+)
+
+history11 <- network %>% fit(training_images, training_labels,
+                epochs = 100, batch_size = 512,
+                validation_data = list(validation_images, validation_labels))
+plot(history11)
+min(history11$metrics$val_loss)
+which(history11$metrics$val_loss==min(history11$metrics$val_loss))
+
+```
+
+```{r Alternative model 8}
+
+# 0.26 @ 33
+network <- keras_model_sequential() %>% 
+  layer_dense(units = 1024, activation = "relu", input_shape = c(28 * 28)) %>%
+  layer_dense(units = 10, activation = "softmax")
+
+network %>% compile(
+  optimizer = "rmsprop",
+  loss = "categorical_crossentropy",
+  metrics = c("accuracy")
+)
+
+history12 <- network %>% fit(training_images, training_labels,
+                epochs = 100, batch_size = 1024,
+                validation_data = list(validation_images, validation_labels))
+plot(history12)
+min(history12$metrics$val_loss)
+which(history12$metrics$val_loss==min(history12$metrics$val_loss))
+```
+
+
+```{r alternative model 9}
+
+#0.28 @ 26
+network <- keras_model_sequential() %>% 
+  layer_dense(units = 512, activation = "relu", input_shape = c(28 * 28)) %>%
+  layer_dropout(rate = 0.25) %>%
+  layer_dense(units = 512, activation = "relu", input_shape = c(28 * 28)) %>%
+  layer_dropout(rate = 0.25) %>%
+  layer_dense(units = 512, activation = "relu", input_shape = c(28 * 28)) %>%
+  layer_dropout(rate = 0.25) %>%
+  layer_dense(units = 512, activation = "relu", input_shape = c(28 * 28)) %>%
+  layer_dropout(rate = 0.25) %>%
+  layer_dense(units = 10, activation = "softmax")
+
+network %>% compile(
+  optimizer = "rmsprop",
+  loss = "categorical_crossentropy",
+  metrics = c("accuracy")
+)
+
+history13 <- network %>% fit(training_images, training_labels,
+                           epochs = 100, batch_size = 512,
+                           validation_data = list(validation_images, validation_labels))
+
+plot(history13)
+min(history13$metrics$val_loss)
+which(history13$metrics$val_loss==min(history13$metrics$val_loss))
+```
+
+```{r alternative model 10}
+
+#0.3 @ 32
+network <- keras_model_sequential() %>% 
+  layer_dense(units = 1024, activation = "relu", input_shape = c(28 * 28)) %>%
+  layer_dropout(rate = 0.25) %>%
+  layer_dense(units = 1024, activation = "relu", input_shape = c(28 * 28)) %>%
+  layer_dropout(rate = 0.25) %>%
+  layer_dense(units = 1024, activation = "relu", input_shape = c(28 * 28)) %>%
+  layer_dropout(rate = 0.25) %>%
+  layer_dense(units = 1024, activation = "relu", input_shape = c(28 * 28)) %>%
+  layer_dropout(rate = 0.25) %>%
+  layer_dense(units = 10, activation = "softmax")
+
+network %>% compile(
+  optimizer = "rmsprop",
+  loss = "categorical_crossentropy",
+  metrics = c("accuracy")
+)
+
+history13 <- network %>% fit(training_images, training_labels,
+                           epochs = 100, batch_size = 1024,
+                           validation_data = list(validation_images, validation_labels))
+
+plot(history13)
+min(history13$metrics$val_loss)
+which(history13$metrics$val_loss==min(history13$metrics$val_loss))
+```
+
+#Final Model (the lowest validation loss score)
+
+Among all the models tested above, alternative model 8 achieved the best performance, with a lowest validation loss of 0.26 at epoch 33. Therefore, it is selected as the final model for the subsequent test.
+
+When reestimating the model using all of the training data with the same hyperparameter, the calculated test set loss is 0.37, and the test set accuracy is 0.88. While the test set loss is quite higher than the validation loss during the first found of model testing, 0.37 is still an acceptable value. Moreover, the 0.87 test set accuracy is also decent. Overall, the model generalizes decently when applied onto the test set.
+
+Compared to other models tested, this model configuration has several characteristics: (1) it has only 2 layers (including the output layer); (2) the first layer has 1024, which is greater than the 512 units used in the initial model; (3) the model doesn't use any drop-out or weight-regularized configurations. The fact that the model has only 2 layers but still performs relatively well compared to other models with more layers may indicate that one hidden layer is sufficient in solving the problem in this case. Moreover, the relatively large of the first layer may have allowed the model to perform better. Last but not least, while drop-out and regularized configurations may prevent models from overfitting when the number of epochs is large, they do not necessarily always improve upon the minimum loss or the maximum accuracy a model can achieve. Because of that, although this model doesn't have a drop-out or regularized configuration, it may still attain better performance than drop-out and regularized models when the correct number of epochs is chosen.
+
+
+
+```{r final model}
+network <- keras_model_sequential() %>% 
+  layer_dense(units = 1024, activation = "relu", input_shape = c(28 * 28)) %>%
+  layer_dense(units = 10, activation = "softmax")
+
+network %>% compile(
+  optimizer = "rmsprop",
+  loss = "categorical_crossentropy",
+  metrics = c("accuracy")
+)
+
+network %>% fit(train_images, train_labels,
+                epochs = 30, batch_size = 1024)
+
+metrics <- network %>% evaluate(test_images, test_labels, verbose = 0)
+metrics
+```
