@@ -230,5 +230,35 @@ The best model appears to be a model using L2 weight regularization, with 256 un
 
 ## Final Model
 ```{r final-model, cache=TRUE}
+final_model = keras_model_sequential()
+
+final_model %>% layer_dense(units = 256, activation = "relu", input_shape = c(784),
+kernel_regularizer = regularizer_l2(0.001)) %>% 
+  layer_dropout(rate = 0.25) %>% 
+  layer_dense(units = 256, activation = "relu", kernel_regularizer = regularizer_l2(0.001)) %>% 
+  layer_dropout(rate = 0.25) %>% 
+  layer_dense(units = 512, activation = "relu",
+kernel_regularizer = regularizer_l2(0.001)) %>% 
+  layer_dropout(rate = 0.25) %>%
+layer_dense(units = 256, activation = "relu", kernel_regularizer = regularizer_l2(0.001)) %>%
+  layer_dropout(rate = 0.25) %>% 
+  layer_dense(units = 10, activation = "softmax")
+4
+final_model %>% compile(loss = "categorical_crossentropy", optimizer = optimizer_rmsprop(),
+metrics = c("accuracy"))
+history_final = final_model %>% fit(x_train, y_train, epochs = 50, batch_size = 512,
+validation_split = 0)
+
+plot(history_final)
+
+yhat_test = predict(final_model, x_test)
+
+correct_vals = yhat_test == y_test
+
+final_accuracy = correct_vals %>% as.numeric() %>% sum() / length(correct_vals)
+
+final_loss = loss_categorical_crossentropy(y_test, yhat_test)
 
 ```
+
+The final model has an accuracy of `r final_accuracy` and a loss of `r final_loss`.
