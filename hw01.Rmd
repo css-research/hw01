@@ -13,6 +13,7 @@ library(keras)
 library(tensorflow)
 library(knitr)
 library(Cairo)
+library(stats)
 
 set.seed(60615)
 windows.options(antialias = "cleartype")
@@ -243,7 +244,7 @@ kernel_regularizer = regularizer_l2(0.001)) %>%
 layer_dense(units = 256, activation = "relu", kernel_regularizer = regularizer_l2(0.001)) %>%
   layer_dropout(rate = 0.25) %>% 
   layer_dense(units = 10, activation = "softmax")
-4
+
 final_model %>% compile(loss = "categorical_crossentropy", optimizer = optimizer_rmsprop(),
 metrics = c("accuracy"))
 history_final = final_model %>% fit(x_train, y_train, epochs = 50, batch_size = 512,
@@ -251,14 +252,31 @@ validation_split = 0)
 
 plot(history_final)
 
-yhat_test = predict(final_model, x_test)
+```
 
-correct_vals = yhat_test == y_test
+```{r final-acc-loss, message=FALSE, warning=FALSE, cache=TRUE}
+yhat_test_raw = predict(final_model, x_test)
+yhat_test_tib = yhat_test_raw %>% as_tibble() %>% round()
+
+reverse_encode = function(ohe_tib) {
+  ohe_tib = yhat_test_tib
+  rev_func = function(index, ohe_tib, categories) {
+    return(categories[ohe_tib[index, ] == 1])
+  }
+  len = 1:length(as.vector(unlist(ohe_tib[,1])))
+  cats = 0:(length(ohe_tib[1,]) - 1)
+  sapply(len, rev_func, ohe_tib, cats) %>% unlist() %>% return()
+}
+
+yhat_test = reverse_encode(yhat_test_tib)
+
+y_test_vec = reverse_encode(y_test)
+
+correct_vals = yhat_test == y_test_vec
 
 final_accuracy = correct_vals %>% as.numeric() %>% sum() / length(correct_vals)
 
-final_loss = loss_categorical_crossentropy(y_test, yhat_test)
-
+final_loss = loss_categorical_crossentropy(y_test, predict(final_model, x_test))$value_index
 ```
 
-The final model has an accuracy of `r final_accuracy` and a loss of `r final_loss`.
+The accuracy of the final model is `r final_accuracy` and the loss is `r final_loss`. This indicates that the final model predicts the testing data better than the training data. This is perhaps due to the combination of dropout layers and regularizers that make the model sufficiently general to fit to other data well.
