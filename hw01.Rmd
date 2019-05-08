@@ -49,13 +49,13 @@ model %>% compile(
   metrics = c('accuracy')
 )
 
-history = model %>% fit(
+history_init = model %>% fit(
   x_train, y_train, 
   epochs = 200, batch_size = 512, 
   validation_split = 0.1666666666666667
 )
 
-plot(history)
+plot(history_init)
 
 model %>% evaluate(x_test, y_test)
 ```
@@ -79,24 +79,124 @@ model %>% compile(
   metrics = c('accuracy')
 )
 
-history = model %>% fit(
+history_do = model %>% fit(
   x_train, y_train, 
   epochs = 200, batch_size = 512, 
   validation_split = 0.1666666666666667
 )
 
-plot(history)
+plot(history_do)
 
 model %>% evaluate(x_test, y_test)
 ```
 
 ## Weight Regularization
-```{r weight-regularization, cache=TRUE}
+```{r weight-regularization-l1, cache=TRUE}
+model %>% 
+  layer_dense(units = 512, activation = 'relu', input_shape = c(784), kernel_regularizer = regularizer_l1(0.001)) %>% 
+  layer_dropout(rate = 0.5) %>% 
+  layer_dense(units = 512, activation = 'relu', kernel_regularizer = regularizer_l1(0.001)) %>%
+  layer_dropout(rate = 0.5) %>% 
+  layer_dense(units = 512, activation = 'relu', kernel_regularizer = regularizer_l1(0.001)) %>%
+  layer_dropout(rate = 0.5) %>% 
+  layer_dense(units = 512, activation = 'relu', kernel_regularizer = regularizer_l1(0.001)) %>%
+  layer_dropout(rate = 0.5) %>% 
+  layer_dense(units = 10, activation = 'softmax')
 
+model %>% compile(
+  loss = 'categorical_crossentropy',
+  optimizer = optimizer_rmsprop(),
+  metrics = c('accuracy')
+)
+
+history_l1 = model %>% fit(
+  x_train, y_train, 
+  epochs = 200, batch_size = 512, 
+  validation_split = 0.1666666666666667
+)
+
+plot(history_l1)
+
+model %>% evaluate(x_test, y_test)
+```
+
+```{r weight-regularization-l2, cache=TRUE}
+model %>% 
+  layer_dense(units = 512, activation = 'relu', input_shape = c(784), kernel_regularizer = regularizer_l2(0.001)) %>% 
+  layer_dropout(rate = 0.5) %>% 
+  layer_dense(units = 512, activation = 'relu', kernel_regularizer = regularizer_l2(0.001)) %>%
+  layer_dropout(rate = 0.5) %>% 
+  layer_dense(units = 512, activation = 'relu', kernel_regularizer = regularizer_l2(0.001)) %>%
+  layer_dropout(rate = 0.5) %>% 
+  layer_dense(units = 512, activation = 'relu', kernel_regularizer = regularizer_l2(0.001)) %>%
+  layer_dropout(rate = 0.5) %>% 
+  layer_dense(units = 10, activation = 'softmax')
+
+model %>% compile(
+  loss = 'categorical_crossentropy',
+  optimizer = optimizer_rmsprop(),
+  metrics = c('accuracy')
+)
+
+history_l2 = model %>% fit(
+  x_train, y_train, 
+  epochs = 200, batch_size = 512, 
+  validation_split = 0.1666666666666667
+)
+
+plot(history_l2)
+
+model %>% evaluate(x_test, y_test)
 ```
 
 ## Other Options
 ```{r other-options, cache=TRUE}
+tune_grid = expand.grid(num_units = c(256, 512), bat_size = c( 512), epochs = c(50, 200), do_ratio = c(0.25, 0.5), weight_pen = c(0.001), weight_method = c(1, 2)) %>% as_tibble()
+
+hyper_param_tune = function(index, t_grid, model) {
+  params = t_grid[index,]
+  
+  if (params$weight_method == 2) {
+    model %>% 
+  layer_dense(units = params$num_units, activation = 'relu', input_shape = c(784), kernel_regularizer = regularizer_l2(params$weight_pen)) %>% 
+  layer_dropout(rate = params$do_ratio) %>% 
+  layer_dense(units = params$num_units, activation = 'relu', kernel_regularizer = regularizer_l2(params$weight_pen)) %>%
+  layer_dropout(rate = params$do_ratio) %>% 
+  layer_dense(units = params$num_units, activation = 'relu', kernel_regularizer = regularizer_l2(params$weight_pen)) %>%
+  layer_dropout(rate = params$do_ratio) %>% 
+  layer_dense(units = params$num_units, activation = 'relu', kernel_regularizer = regularizer_l2(params$weight_pen)) %>%
+  layer_dropout(rate = params$do_ratio) %>% 
+  layer_dense(units = 10, activation = 'softmax')
+  } else{
+    model %>% 
+  layer_dense(units = params$num_units, activation = 'relu', input_shape = c(784), kernel_regularizer = regularizer_l2(params$weight_pen)) %>% 
+  layer_dropout(rate = params$do_ratio) %>% 
+  layer_dense(units = params$num_units, activation = 'relu', kernel_regularizer = regularizer_l1(params$weight_pen)) %>%
+  layer_dropout(rate = params$do_ratio) %>% 
+  layer_dense(units = params$num_units, activation = 'relu', kernel_regularizer = regularizer_l1(params$weight_pen)) %>%
+  layer_dropout(rate = params$do_ratio) %>% 
+  layer_dense(units = params$num_units, activation = 'relu', kernel_regularizer = regularizer_l1(params$weight_pen)) %>%
+  layer_dropout(rate = params$do_ratio) %>% 
+  layer_dense(units = 10, activation = 'softmax')
+  }
+  
+
+model %>% compile(
+  loss = 'categorical_crossentropy',
+  optimizer = optimizer_rmsprop(),
+  metrics = c('accuracy')
+)
+
+history_l2 = model %>% fit(
+  x_train, y_train, 
+  epochs = params$epochs, batch_size = params$bat_size, 
+  validation_split = 0.1666666666666667
+)
+
+model %>% evaluate(x_test, y_test) %>% as_tibble() %>% bind_cols(params) %>% return()
+}
+
+results = sapply(1:length(tune_grid$num_units), hyper_param_tune, tune_grid, model)
 
 ```
 
