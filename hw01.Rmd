@@ -6,12 +6,17 @@ output: pdf_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE,fig.width=10, fig.height=7, dev = "cairo_pdf", tidy.opts=list(width.cutoff=60), tidy=TRUE)
 
 library(tidyverse)
 library(keras)
 library(tensorflow)
 library(knitr)
+library(Cairo)
+
+set.seed(60615)
+windows.options(antialias = "cleartype")
+options(device = Cairo::CairoWin)
 ```
 
 ## Getting Data
@@ -129,7 +134,11 @@ plot(history_l1)
 model %>% evaluate(x_test, y_test)
 ```
 
+With L1 regularization at 0.001, training accuracy drops to be lower than validation accuracy. Both accuracies are lower than previous models.
+
 ```{r weight-regularization-l2, cache=TRUE}
+model = keras_model_sequential()
+
 model %>% 
   layer_dense(units = 512, activation = 'relu', input_shape = c(784), kernel_regularizer = regularizer_l2(0.001)) %>% 
   layer_dropout(rate = 0.5) %>% 
@@ -158,6 +167,8 @@ plot(history_l2)
 model %>% evaluate(x_test, y_test)
 ```
 
+The L2 regularization results in training and validation accuracy which are much more similar than with L1 regularization. The accuracy is also higher at about 0.9.
+
 ## Other Options
 ```{r other-options, cache=TRUE}
 tune_grid = expand.grid(num_units = c(256, 512), bat_size = c( 512), epochs = c(50, 200), do_ratio = c(0.25, 0.5), weight_pen = c(0.001), weight_method = c(1, 2)) %>% as_tibble()
@@ -165,28 +176,30 @@ tune_grid = expand.grid(num_units = c(256, 512), bat_size = c( 512), epochs = c(
 hyper_param_tune = function(index, t_grid, model) {
   params = t_grid[index,]
   
+  model = keras_model_sequential()
+  
   if (params$weight_method == 2) {
     model %>% 
-  layer_dense(units = params$num_units, activation = 'relu', input_shape = c(784), kernel_regularizer = regularizer_l2(params$weight_pen)) %>% 
-  layer_dropout(rate = params$do_ratio) %>% 
-  layer_dense(units = params$num_units, activation = 'relu', kernel_regularizer = regularizer_l2(params$weight_pen)) %>%
-  layer_dropout(rate = params$do_ratio) %>% 
-  layer_dense(units = params$num_units, activation = 'relu', kernel_regularizer = regularizer_l2(params$weight_pen)) %>%
-  layer_dropout(rate = params$do_ratio) %>% 
-  layer_dense(units = params$num_units, activation = 'relu', kernel_regularizer = regularizer_l2(params$weight_pen)) %>%
-  layer_dropout(rate = params$do_ratio) %>% 
-  layer_dense(units = 10, activation = 'softmax')
+    layer_dense(units = params$num_units, activation = 'relu', input_shape = c(784), kernel_regularizer = regularizer_l2(params$weight_pen)) %>% 
+    layer_dropout(rate = params$do_ratio) %>% 
+    layer_dense(units = params$num_units, activation = 'relu', kernel_regularizer = regularizer_l2(params$weight_pen)) %>%
+    layer_dropout(rate = params$do_ratio) %>% 
+    layer_dense(units = params$num_units, activation = 'relu', kernel_regularizer = regularizer_l2(params$weight_pen)) %>%
+    layer_dropout(rate = params$do_ratio) %>% 
+    layer_dense(units = params$num_units, activation = 'relu', kernel_regularizer = regularizer_l2(params$weight_pen)) %>%
+    layer_dropout(rate = params$do_ratio) %>% 
+    layer_dense(units = 10, activation = 'softmax')
   } else{
-    model %>% 
-  layer_dense(units = params$num_units, activation = 'relu', input_shape = c(784), kernel_regularizer = regularizer_l2(params$weight_pen)) %>% 
-  layer_dropout(rate = params$do_ratio) %>% 
-  layer_dense(units = params$num_units, activation = 'relu', kernel_regularizer = regularizer_l1(params$weight_pen)) %>%
-  layer_dropout(rate = params$do_ratio) %>% 
-  layer_dense(units = params$num_units, activation = 'relu', kernel_regularizer = regularizer_l1(params$weight_pen)) %>%
-  layer_dropout(rate = params$do_ratio) %>% 
-  layer_dense(units = params$num_units, activation = 'relu', kernel_regularizer = regularizer_l1(params$weight_pen)) %>%
-  layer_dropout(rate = params$do_ratio) %>% 
-  layer_dense(units = 10, activation = 'softmax')
+      model %>% 
+    layer_dense(units = params$num_units, activation = 'relu', input_shape = c(784), kernel_regularizer = regularizer_l2(params$weight_pen)) %>% 
+    layer_dropout(rate = params$do_ratio) %>% 
+    layer_dense(units = params$num_units, activation = 'relu', kernel_regularizer = regularizer_l1(params$weight_pen)) %>%
+    layer_dropout(rate = params$do_ratio) %>% 
+    layer_dense(units = params$num_units, activation = 'relu', kernel_regularizer = regularizer_l1(params$weight_pen)) %>%
+    layer_dropout(rate = params$do_ratio) %>% 
+    layer_dense(units = params$num_units, activation = 'relu', kernel_regularizer = regularizer_l1(params$weight_pen)) %>%
+    layer_dropout(rate = params$do_ratio) %>% 
+    layer_dense(units = 10, activation = 'softmax')
   }
   
 
@@ -213,6 +226,7 @@ results = sapply(1:length(tune_grid$num_units), hyper_param_tune, tune_grid, mod
 results %>% as.matrix() %>% t() %>% as_tibble() %>% kable()
 ```
 
+The best model appears to be a model using L2 weight regularization, with 256 units, a batch size of 512, a dropout ratio of 0.25, running at 200 epochs. However, while the gains in accuracy are minimal from a model that runs for 50 epochs, a model running for 200 epochs runs for significantly more time. As the previous models all improved very little past 50 epochs, I will use a model with 50 epochs instead to sacrifice a little accuracy to gain back a significant amount of time.
 
 ## Final Model
 ```{r final-model, cache=TRUE}
