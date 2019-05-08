@@ -11,6 +11,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(keras)
 library(tensorflow)
+library(knitr)
 ```
 
 ## Getting Data
@@ -60,8 +61,12 @@ plot(history_init)
 model %>% evaluate(x_test, y_test)
 ```
 
+The validation performance does not improve any further after 50 epochs.
+
 ## Implementing Dropout
 ```{r dropout, cache=TRUE}
+model = keras_model_sequential() 
+
 model %>% 
   layer_dense(units = 512, activation = 'relu', input_shape = c(784)) %>% 
   layer_dropout(rate = 0.5) %>% 
@@ -90,8 +95,12 @@ plot(history_do)
 model %>% evaluate(x_test, y_test)
 ```
 
+The validation accuracy, while still leveling off around epoch 50, is considerably higher, with validation losses being less as well.
+
 ## Weight Regularization
 ```{r weight-regularization-l1, cache=TRUE}
+model = keras_model_sequential()
+
 model %>% 
   layer_dense(units = 512, activation = 'relu', input_shape = c(784), kernel_regularizer = regularizer_l1(0.001)) %>% 
   layer_dropout(rate = 0.5) %>% 
@@ -199,6 +208,11 @@ model %>% evaluate(x_test, y_test) %>% as_tibble() %>% bind_cols(params) %>% ret
 results = sapply(1:length(tune_grid$num_units), hyper_param_tune, tune_grid, model)
 
 ```
+
+```{r analyze-results, cache=TRUE}
+results %>% as.matrix() %>% t() %>% as_tibble() %>% kable()
+```
+
 
 ## Final Model
 ```{r final-model, cache=TRUE}
