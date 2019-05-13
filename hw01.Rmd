@@ -1,0 +1,282 @@
+---
+title: "Homework 1"
+author: "Adam Shelton"
+date: "5/8/2019"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,fig.width=10, fig.height=7, dev = "cairo_pdf", tidy.opts=list(width.cutoff=60), tidy=TRUE)
+
+library(tidyverse)
+library(keras)
+library(tensorflow)
+library(knitr)
+library(Cairo)
+library(stats)
+
+set.seed(60615)
+windows.options(antialias = "cleartype")
+options(device = Cairo::CairoWin)
+```
+
+## Getting Data
+```{r getting-data, cache=TRUE}
+fashion_mnist = keras::dataset_fashion_mnist()
+
+x_train = fashion_mnist$train$x
+y_train = fashion_mnist$train$y
+
+x_test = fashion_mnist$test$x
+y_test = fashion_mnist$test$y
+
+rm(fashion_mnist)
+
+x_train = array_reshape(x_train, c(nrow(x_train), 28 * 28)) / 255
+x_test = array_reshape(x_test, c(nrow(x_test), 28 * 28)) / 255
+
+y_train = to_categorical(y_train, 10)
+y_test = to_categorical(y_test, 10)
+```
+
+## Initial test
+```{r initial-test, cache=TRUE}
+model = keras_model_sequential() 
+
+model %>% 
+  layer_dense(units = 512, activation = 'relu', input_shape = c(784)) %>% 
+  layer_dense(units = 512, activation = 'relu') %>%
+  layer_dense(units = 512, activation = 'relu') %>%
+  layer_dense(units = 512, activation = 'relu') %>%
+  layer_dense(units = 10, activation = 'softmax')
+
+model %>% compile(
+  loss = 'categorical_crossentropy',
+  optimizer = optimizer_rmsprop(),
+  metrics = c('accuracy')
+)
+
+history_init = model %>% fit(
+  x_train, y_train, 
+  epochs = 200, batch_size = 512, 
+  validation_split = 0.1666666666666667
+)
+
+plot(history_init)
+
+model %>% evaluate(x_test, y_test)
+```
+
+The validation performance does not improve any further after 50 epochs.
+
+## Implementing Dropout
+```{r dropout, cache=TRUE}
+model = keras_model_sequential() 
+
+model %>% 
+  layer_dense(units = 512, activation = 'relu', input_shape = c(784)) %>% 
+  layer_dropout(rate = 0.5) %>% 
+  layer_dense(units = 512, activation = 'relu') %>%
+  layer_dropout(rate = 0.5) %>% 
+  layer_dense(units = 512, activation = 'relu') %>%
+  layer_dropout(rate = 0.5) %>% 
+  layer_dense(units = 512, activation = 'relu') %>%
+  layer_dropout(rate = 0.5) %>% 
+  layer_dense(units = 10, activation = 'softmax')
+
+model %>% compile(
+  loss = 'categorical_crossentropy',
+  optimizer = optimizer_rmsprop(),
+  metrics = c('accuracy')
+)
+
+history_do = model %>% fit(
+  x_train, y_train, 
+  epochs = 200, batch_size = 512, 
+  validation_split = 0.1666666666666667
+)
+
+plot(history_do)
+
+model %>% evaluate(x_test, y_test)
+```
+
+The validation accuracy, while still leveling off around epoch 50, is considerably higher, with validation losses being less as well.
+
+## Weight Regularization
+```{r weight-regularization-l1, cache=TRUE}
+model = keras_model_sequential()
+
+model %>% 
+  layer_dense(units = 512, activation = 'relu', input_shape = c(784), kernel_regularizer = regularizer_l1(0.001)) %>% 
+  layer_dropout(rate = 0.5) %>% 
+  layer_dense(units = 512, activation = 'relu', kernel_regularizer = regularizer_l1(0.001)) %>%
+  layer_dropout(rate = 0.5) %>% 
+  layer_dense(units = 512, activation = 'relu', kernel_regularizer = regularizer_l1(0.001)) %>%
+  layer_dropout(rate = 0.5) %>% 
+  layer_dense(units = 512, activation = 'relu', kernel_regularizer = regularizer_l1(0.001)) %>%
+  layer_dropout(rate = 0.5) %>% 
+  layer_dense(units = 10, activation = 'softmax')
+
+model %>% compile(
+  loss = 'categorical_crossentropy',
+  optimizer = optimizer_rmsprop(),
+  metrics = c('accuracy')
+)
+
+history_l1 = model %>% fit(
+  x_train, y_train, 
+  epochs = 200, batch_size = 512, 
+  validation_split = 0.1666666666666667
+)
+
+plot(history_l1)
+
+model %>% evaluate(x_test, y_test)
+```
+
+With L1 regularization at 0.001, training accuracy drops to be lower than validation accuracy. Both accuracies are lower than previous models.
+
+```{r weight-regularization-l2, cache=TRUE}
+model = keras_model_sequential()
+
+model %>% 
+  layer_dense(units = 512, activation = 'relu', input_shape = c(784), kernel_regularizer = regularizer_l2(0.001)) %>% 
+  layer_dropout(rate = 0.5) %>% 
+  layer_dense(units = 512, activation = 'relu', kernel_regularizer = regularizer_l2(0.001)) %>%
+  layer_dropout(rate = 0.5) %>% 
+  layer_dense(units = 512, activation = 'relu', kernel_regularizer = regularizer_l2(0.001)) %>%
+  layer_dropout(rate = 0.5) %>% 
+  layer_dense(units = 512, activation = 'relu', kernel_regularizer = regularizer_l2(0.001)) %>%
+  layer_dropout(rate = 0.5) %>% 
+  layer_dense(units = 10, activation = 'softmax')
+
+model %>% compile(
+  loss = 'categorical_crossentropy',
+  optimizer = optimizer_rmsprop(),
+  metrics = c('accuracy')
+)
+
+history_l2 = model %>% fit(
+  x_train, y_train, 
+  epochs = 200, batch_size = 512, 
+  validation_split = 0.1666666666666667
+)
+
+plot(history_l2)
+
+model %>% evaluate(x_test, y_test)
+```
+
+The L2 regularization results in training and validation accuracy which are much more similar than with L1 regularization. The accuracy is also higher at about 0.9.
+
+## Other Options
+```{r other-options, cache=TRUE}
+tune_grid = expand.grid(num_units = c(256, 512), bat_size = c( 512), epochs = c(50, 200), do_ratio = c(0.25, 0.5), weight_pen = c(0.001), weight_method = c(1, 2)) %>% as_tibble()
+
+hyper_param_tune = function(index, t_grid, model) {
+  params = t_grid[index,]
+  
+  model = keras_model_sequential()
+  
+  if (params$weight_method == 2) {
+    model %>% 
+    layer_dense(units = params$num_units, activation = 'relu', input_shape = c(784), kernel_regularizer = regularizer_l2(params$weight_pen)) %>% 
+    layer_dropout(rate = params$do_ratio) %>% 
+    layer_dense(units = params$num_units, activation = 'relu', kernel_regularizer = regularizer_l2(params$weight_pen)) %>%
+    layer_dropout(rate = params$do_ratio) %>% 
+    layer_dense(units = params$num_units, activation = 'relu', kernel_regularizer = regularizer_l2(params$weight_pen)) %>%
+    layer_dropout(rate = params$do_ratio) %>% 
+    layer_dense(units = params$num_units, activation = 'relu', kernel_regularizer = regularizer_l2(params$weight_pen)) %>%
+    layer_dropout(rate = params$do_ratio) %>% 
+    layer_dense(units = 10, activation = 'softmax')
+  } else{
+      model %>% 
+    layer_dense(units = params$num_units, activation = 'relu', input_shape = c(784), kernel_regularizer = regularizer_l2(params$weight_pen)) %>% 
+    layer_dropout(rate = params$do_ratio) %>% 
+    layer_dense(units = params$num_units, activation = 'relu', kernel_regularizer = regularizer_l1(params$weight_pen)) %>%
+    layer_dropout(rate = params$do_ratio) %>% 
+    layer_dense(units = params$num_units, activation = 'relu', kernel_regularizer = regularizer_l1(params$weight_pen)) %>%
+    layer_dropout(rate = params$do_ratio) %>% 
+    layer_dense(units = params$num_units, activation = 'relu', kernel_regularizer = regularizer_l1(params$weight_pen)) %>%
+    layer_dropout(rate = params$do_ratio) %>% 
+    layer_dense(units = 10, activation = 'softmax')
+  }
+  
+
+model %>% compile(
+  loss = 'categorical_crossentropy',
+  optimizer = optimizer_rmsprop(),
+  metrics = c('accuracy')
+)
+
+history_l2 = model %>% fit(
+  x_train, y_train, 
+  epochs = params$epochs, batch_size = params$bat_size, 
+  validation_split = 0.1666666666666667
+)
+
+model %>% evaluate(x_test, y_test) %>% as_tibble() %>% bind_cols(params) %>% return()
+}
+
+results = sapply(1:length(tune_grid$num_units), hyper_param_tune, tune_grid, model)
+
+```
+
+```{r analyze-results, cache=TRUE}
+results %>% as.matrix() %>% t() %>% as_tibble() %>% kable()
+```
+
+The best model appears to be a model using L2 weight regularization, with 256 units, a batch size of 512, a dropout ratio of 0.25, running at 200 epochs. However, while the gains in accuracy are minimal from a model that runs for 50 epochs, a model running for 200 epochs runs for significantly more time. As the previous models all improved very little past 50 epochs, I will use a model with 50 epochs instead to sacrifice a little accuracy to gain back a significant amount of time.
+
+## Final Model
+```{r final-model, cache=TRUE}
+final_model = keras_model_sequential()
+
+final_model %>% layer_dense(units = 256, activation = "relu", input_shape = c(784),
+kernel_regularizer = regularizer_l2(0.001)) %>% 
+  layer_dropout(rate = 0.25) %>% 
+  layer_dense(units = 256, activation = "relu", kernel_regularizer = regularizer_l2(0.001)) %>% 
+  layer_dropout(rate = 0.25) %>% 
+  layer_dense(units = 512, activation = "relu",
+kernel_regularizer = regularizer_l2(0.001)) %>% 
+  layer_dropout(rate = 0.25) %>%
+layer_dense(units = 256, activation = "relu", kernel_regularizer = regularizer_l2(0.001)) %>%
+  layer_dropout(rate = 0.25) %>% 
+  layer_dense(units = 10, activation = "softmax")
+
+final_model %>% compile(loss = "categorical_crossentropy", optimizer = optimizer_rmsprop(),
+metrics = c("accuracy"))
+history_final = final_model %>% fit(x_train, y_train, epochs = 50, batch_size = 512,
+validation_split = 0)
+
+plot(history_final)
+
+```
+
+```{r final-acc-loss, message=FALSE, warning=FALSE, cache=TRUE}
+yhat_test_raw = predict(final_model, x_test)
+yhat_test_tib = yhat_test_raw %>% as_tibble() %>% round()
+
+reverse_encode = function(ohe_tib) {
+  ohe_tib = yhat_test_tib
+  rev_func = function(index, ohe_tib, categories) {
+    return(categories[ohe_tib[index, ] == 1])
+  }
+  len = 1:length(as.vector(unlist(ohe_tib[,1])))
+  cats = 0:(length(ohe_tib[1,]) - 1)
+  sapply(len, rev_func, ohe_tib, cats) %>% unlist() %>% return()
+}
+
+yhat_test = reverse_encode(yhat_test_tib)
+
+y_test_vec = reverse_encode(y_test)
+
+correct_vals = yhat_test == y_test_vec
+
+final_accuracy = correct_vals %>% as.numeric() %>% sum() / length(correct_vals)
+
+final_loss = loss_categorical_crossentropy(y_test, predict(final_model, x_test))$value_index
+```
+
+The accuracy of the final model is `r final_accuracy` and the loss is `r final_loss`. This indicates that the final model predicts the testing data better than the training data. This is perhaps due to the combination of dropout layers and regularizers that make the model sufficiently general to fit to other data well.
